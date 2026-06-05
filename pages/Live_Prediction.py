@@ -3,149 +3,108 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
+import plotly.graph_objects as go
 
 st.set_page_config(
     page_title="Live Prediction",
+    page_icon="🔮",
     layout="wide"
 )
 
-st.title("🔮 Real-Time Equipment Failure Prediction")
+st.title("🔮 Predictive Maintenance - Live Prediction")
 
 # =====================================================
-# LOAD MODEL & SCALER
+# MODEL CHECK
 # =====================================================
 
-MODEL_PATH = "best_model.pkl"
-SCALER_PATH = "scaler.pkl"
+MODEL_PATH = "models/best_model.pkl"
+SCALER_PATH = "models/scaler.pkl"
+FEATURE_PATH = "models/feature_names.pkl"
 
 if not os.path.exists(MODEL_PATH):
-    st.error("best_model.pkl not found. Please train the model first.")
+
+    st.warning(
+        "No trained model found.\n\n"
+        "Please go to Model Training page and train the model first."
+    )
+
     st.stop()
 
-if not os.path.exists(SCALER_PATH):
-    st.error("scaler.pkl not found. Please train the model first.")
-    st.stop()
+# =====================================================
+# LOAD FILES
+# =====================================================
 
 model = joblib.load(MODEL_PATH)
+
 scaler = joblib.load(SCALER_PATH)
 
+feature_names = joblib.load(FEATURE_PATH)
+
 # =====================================================
-# FEATURE INPUT SECTION
+# SIDEBAR
 # =====================================================
 
-st.header("⚙️ Sensor Input Parameters")
+st.sidebar.header("Model Information")
 
-st.info(
-    "Enter the current sensor readings of the equipment."
+st.sidebar.success(
+    f"Features Loaded: {len(feature_names)}"
 )
 
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    metric1 = st.number_input(
-        "Metric 1",
-        value=50.0
-    )
-
-    metric2 = st.number_input(
-        "Metric 2",
-        value=50.0
-    )
-
-    metric3 = st.number_input(
-        "Metric 3",
-        value=50.0
-    )
-
-with col2:
-    metric4 = st.number_input(
-        "Metric 4",
-        value=50.0
-    )
-
-    metric5 = st.number_input(
-        "Metric 5",
-        value=50.0
-    )
-
-    metric6 = st.number_input(
-        "Metric 6",
-        value=50.0
-    )
-
-with col3:
-    metric7 = st.number_input(
-        "Metric 7",
-        value=50.0
-    )
-
-    metric8 = st.number_input(
-        "Metric 8",
-        value=50.0
-    )
-
-    metric9 = st.number_input(
-        "Metric 9",
-        value=50.0
-    )
-
 # =====================================================
-# PREDICTION
+# MANUAL PREDICTION
 # =====================================================
 
-if st.button("Predict Failure Risk"):
+st.header("⚙ Manual Sensor Input")
 
-    input_data = pd.DataFrame(
-        [[
-            metric1,
-            metric2,
-            metric3,
-            metric4,
-            metric5,
-            metric6,
-            metric7,
-            metric8,
-            metric9
-        ]],
-        columns=[
-            "metric1",
-            "metric2",
-            "metric3",
-            "metric4",
-            "metric5",
-            "metric6",
-            "metric7",
-            "metric8",
-            "metric9"
-        ]
+user_inputs = {}
+
+col1, col2 = st.columns(2)
+
+for idx, feature in enumerate(feature_names):
+
+    if idx % 2 == 0:
+
+        with col1:
+
+            user_inputs[feature] = st.number_input(
+                feature,
+                value=0.0
+            )
+
+    else:
+
+        with col2:
+
+            user_inputs[feature] = st.number_input(
+                feature,
+                value=0.0
+            )
+
+# =====================================================
+# PREDICT BUTTON
+# =====================================================
+
+if st.button("Predict Failure"):
+
+    input_df = pd.DataFrame(
+        [user_inputs]
     )
 
-    scaled_input = scaler.transform(
-        input_data
+    input_scaled = scaler.transform(
+        input_df
     )
 
     prediction = model.predict(
-        scaled_input
+        input_scaled
     )[0]
 
-    # ==========================================
-    # PROBABILITY
-    # ==========================================
+    probability = model.predict_proba(
+        input_scaled
+    )[0][1]
 
-    if hasattr(model, "predict_proba"):
+    st.subheader("Prediction Result")
 
-        probability = (
-            model.predict_proba(
-                scaled_input
-            )[0][1]
-        )
-
-    else:
-        probability = float(prediction)
-
-    st.header("📊 Prediction Results")
-
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
 
@@ -156,85 +115,53 @@ if st.button("Predict Failure Risk"):
 
     with col2:
 
-        if prediction == 1:
-
-            st.error(
-                "⚠️ FAILURE LIKELY"
-            )
-
-        else:
-
-            st.success(
-                "✅ HEALTHY EQUIPMENT"
-            )
-
-    # ==========================================
-    # RISK LEVEL
-    # ==========================================
-
-    st.subheader("Risk Assessment")
-
-    if probability < 0.30:
-
-        st.success(
-            "🟢 LOW RISK"
+        st.metric(
+            "Prediction",
+            "Failure" if prediction == 1 else "Healthy"
         )
 
-        recommendation = """
-        • Continue normal operations.
-        • Follow standard maintenance schedule.
-        • Monitor equipment periodically.
-        """
+    with col3:
 
-    elif probability < 0.70:
+        risk = "HIGH" if probability > 0.7 else \
+               "MEDIUM" if probability > 0.4 else \
+               "LOW"
 
-        st.warning(
-            "🟡 MEDIUM RISK"
+        st.metric(
+            "Risk Level",
+            risk
         )
 
-        recommendation = """
-        • Increase inspection frequency.
-        • Check critical components.
-        • Schedule preventive maintenance.
-        """
-
-    else:
-
-        st.error(
-            "🔴 HIGH RISK"
-        )
-
-        recommendation = """
-        • Immediate inspection recommended.
-        • Schedule maintenance urgently.
-        • Consider equipment shutdown if critical.
-        • Replace faulty components.
-        """
-
-    # ==========================================
+    # =========================================
     # GAUGE CHART
-    # ==========================================
-
-    st.subheader(
-        "Failure Risk Gauge"
-    )
-
-    import plotly.graph_objects as go
+    # =========================================
 
     fig = go.Figure(
+
         go.Indicator(
+
             mode="gauge+number",
+
             value=probability * 100,
+
             title={
+
                 "text":
-                "Failure Probability (%)"
+                "Failure Risk (%)"
+
             },
+
             gauge={
+
                 "axis": {
+
                     "range": [0, 100]
+
                 }
+
             }
+
         )
+
     )
 
     st.plotly_chart(
@@ -242,28 +169,31 @@ if st.button("Predict Failure Risk"):
         use_container_width=True
     )
 
-    # ==========================================
-    # MAINTENANCE RECOMMENDATION
-    # ==========================================
+    # =========================================
+    # MAINTENANCE ADVICE
+    # =========================================
 
     st.subheader(
-        "🛠 Maintenance Recommendation"
+        "Maintenance Recommendation"
     )
 
-    st.info(recommendation)
+    if probability < 0.40:
 
-    # ==========================================
-    # SENSOR SUMMARY
-    # ==========================================
+        st.success(
+            "Equipment operating normally. Continue routine maintenance."
+        )
 
-    st.subheader(
-        "📋 Input Sensor Summary"
-    )
+    elif probability < 0.70:
 
-    st.dataframe(
-        input_data,
-        use_container_width=True
-    )
+        st.warning(
+            "Preventive inspection recommended within the next maintenance cycle."
+        )
+
+    else:
+
+        st.error(
+            "Immediate maintenance recommended. High failure probability detected."
+        )
 
 # =====================================================
 # BATCH PREDICTION
@@ -271,65 +201,75 @@ if st.button("Predict Failure Risk"):
 
 st.divider()
 
-st.header(
-    "📂 Batch Prediction"
-)
+st.header("📂 Batch Prediction")
 
-uploaded_batch = st.file_uploader(
-    "Upload CSV for Batch Prediction",
+uploaded_file = st.file_uploader(
+    "Upload CSV",
     type=["csv"]
 )
 
-if uploaded_batch is not None:
+if uploaded_file is not None:
 
     batch_df = pd.read_csv(
-        uploaded_batch
+        uploaded_file
     )
 
-    feature_columns = [
-        "metric1",
-        "metric2",
-        "metric3",
-        "metric4",
-        "metric5",
-        "metric6",
-        "metric7",
-        "metric8",
-        "metric9"
+    missing_cols = [
+
+        col
+
+        for col in feature_names
+
+        if col not in batch_df.columns
+
     ]
 
-    batch_scaled = scaler.transform(
-        batch_df[feature_columns]
-    )
+    if missing_cols:
 
-    batch_df["Prediction"] = model.predict(
-        batch_scaled
-    )
-
-    if hasattr(model, "predict_proba"):
-
-        batch_df["Failure_Probability"] = (
-            model.predict_proba(
-                batch_scaled
-            )[:,1]
+        st.error(
+            f"Missing Columns: {missing_cols}"
         )
 
-    st.subheader(
-        "Prediction Results"
-    )
+    else:
 
-    st.dataframe(
-        batch_df,
-        use_container_width=True
-    )
+        X = batch_df[
+            feature_names
+        ]
 
-    csv = batch_df.to_csv(
-        index=False
-    )
+        X_scaled = scaler.transform(X)
 
-    st.download_button(
-        label="Download Results",
-        data=csv,
-        file_name="predictions.csv",
-        mime="text/csv"
-    )
+        batch_df["Prediction"] = (
+
+            model.predict(
+                X_scaled
+            )
+
+        )
+
+        batch_df["Failure_Probability"] = (
+
+            model.predict_proba(
+                X_scaled
+            )[:, 1]
+
+        )
+
+        st.dataframe(
+            batch_df.head()
+        )
+
+        csv = batch_df.to_csv(
+            index=False
+        )
+
+        st.download_button(
+
+            label="Download Predictions",
+
+            data=csv,
+
+            file_name="prediction_results.csv",
+
+            mime="text/csv"
+
+        )
